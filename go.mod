@@ -3,6 +3,7 @@ module github.com/kylinxiang70/k8s-demo
 go 1.14
 
 require (
+	github.com/prometheus/common v0.10.0
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.19.4
 	k8s.io/client-go v0.0.0
