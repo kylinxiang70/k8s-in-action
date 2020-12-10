@@ -53,7 +53,7 @@ import (
 // that objects may implement any of the below interfaces.
 type Storage interface {
 	// New returns an empty object that can be used with Create and Update after request data has been put into it.
-	// This object must be a pointer type for use with Codec.DecodeInto([]byte, runtime.Object)
+	// This object must be a pointer type for use with codec.DecodeInto([]byte, runtime.Object)
 	New() runtime.Object
 }
 
@@ -94,7 +94,7 @@ type GroupVersionKindProvider interface {
 // Lister is an object that can retrieve resources that match the provided field and label criteria.
 type Lister interface {
 	// NewList returns an empty object that can be used with the List call.
-	// This object must be a pointer type for use with Codec.DecodeInto([]byte, runtime.Object)
+	// This object must be a pointer type for use with codec.DecodeInto([]byte, runtime.Object)
 	NewList() runtime.Object
 	// List selects resources in the storage which match to the selector. 'options' can be nil.
 	List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error)
@@ -181,7 +181,7 @@ type CollectionDeleter interface {
 // Creater is an object that can create an instance of a RESTful object.
 type Creater interface {
 	// New returns an empty object that can be used with Create after request data has been put into it.
-	// This object must be a pointer type for use with Codec.DecodeInto([]byte, runtime.Object)
+	// This object must be a pointer type for use with codec.DecodeInto([]byte, runtime.Object)
 	New() runtime.Object
 
 	// Create creates a new version of a resource.
@@ -191,7 +191,7 @@ type Creater interface {
 // NamedCreater is an object that can create an instance of a RESTful object using a name parameter.
 type NamedCreater interface {
 	// New returns an empty object that can be used with Create after request data has been put into it.
-	// This object must be a pointer type for use with Codec.DecodeInto([]byte, runtime.Object)
+	// This object must be a pointer type for use with codec.DecodeInto([]byte, runtime.Object)
 	New() runtime.Object
 
 	// Create creates a new version of a resource. It expects a name parameter from the path.
@@ -236,7 +236,7 @@ func ValidateAllObjectUpdateFunc(ctx context.Context, obj, old runtime.Object) e
 // Updater is an object that can update an instance of a RESTful object.
 type Updater interface {
 	// New returns an empty object that can be used with Update after request data has been put into it.
-	// This object must be a pointer type for use with Codec.DecodeInto([]byte, runtime.Object)
+	// This object must be a pointer type for use with codec.DecodeInto([]byte, runtime.Object)
 	New() runtime.Object
 
 	// Update finds a resource in the storage and updates it. Some implementations

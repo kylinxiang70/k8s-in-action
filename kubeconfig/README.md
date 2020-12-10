@@ -2,21 +2,21 @@
 
 ## kubeconfig简介
 
-Kubeconfig用于管理访问kube-apiserver的配置信息，同时也支持访问多个kube-apiserver的配置管理。
-kubeconfig中存储了集群、用户、命名空间和身份验证信息，在默认情况下，kubeconfig存放在$Home/.kube/config中。
+Kubeconfig 用于管理访问 kube-apiserver 的配置信息, 同时也支持访问多个 kube-apiserver 的配置管理. 
+kubeconfig 中存储了集群、用户、命名空间和身份验证信息, 在默认情况下, kubeconfig 存放在 $Home/.kube/config中. 
 ### 配置
 ```yaml
 apiVersion: v1
 Kind: Config
 preferences: {}
-# 定义Kubernetes集群信息，例如kube-apiserver的地址及集群的证书信息
+# 定义 Kubernetes 集群信息, 例如 kube-apiserver 的地址及集群的证书信息
 clusters:
 - cluster:
   name: dev
-# 定义Kubernetes集群用户身份验证的客户端凭据，例如client-certificate、client-key、token及username/password等。
+# 定义 Kubernetes 集群用户身份验证的客户端凭据, 例如 client-certificate、client-key、token及username/password 等. 
 users:
 - name: dev-user
-# 定义Kubernetes集群用户信息和命名空间等，用于将请求发送到指定的集群。
+# 定义 Kubernetes 集群用户信息和命名空间等, 用于将请求发送到指定的集群. 
 contexts:
 - context:
   name: dev-context

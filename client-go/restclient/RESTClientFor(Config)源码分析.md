@@ -1,12 +1,16 @@
-# RESTClientFor(Config)源码分析
+# RESTClientFor 源码分析
 
-使用RESTClientFor(Config)可以创建指定Kubeconfig配置的Kubernetes Client-go REST客户端。
+使用 `RESTClientFor(Config)` 可以创建指定 Kubeconfig 配置的 Kubernetes Client-go REST 客户端. 
+
 使用如下：
+
 ```go
 restClient, err := rest.RESTClientFor(config)
 ```
 # 代码片段1：RESTClientFor()
+
 代码路径k8s.io/client-go/rest/config.go
+
 ```go
 // RESTClientFor returns a RESTClient that satisfies the requested attributes on a client Config
 // object. Note that a RESTClient may require fields that are optional when initializing a Client.
@@ -21,7 +25,7 @@ func RESTClientFor(config *Config) (*RESTClient, error) {
 		return nil, fmt.Errorf("NegotiatedSerializer is required when initializing a RESTClient")
 	}
 
-    // 从config中获取访问的K8s apiserver的baseURL和versionedAPIPath
+    // 从 config 中获取访问的 K8s apiserver 的 baseURL 和 versionedAPIPath
     // 详细分析见后文代码片段1.1
 	baseURL, versionedAPIPath, err := defaultServerUrlFor(config)
 	if err != nil {
@@ -75,7 +79,9 @@ func RESTClientFor(config *Config) (*RESTClient, error) {
 }
 ```
 ## 代码片段1.1：defaultServerUrlFor(config)
-defaultServerUrlFor(config)用来获取config配置中的Host信息。
+
+`defaultServerUrlFor(config)` 用来获取 `config` 配置中的 `Host` 信息. 
+
 代码路径：k8s.io/client-go/rest/url_utils
 ```go
 // defaultServerUrlFor is shared between IsConfigTransportTLS and RESTClientFor. It
@@ -88,16 +94,17 @@ func defaultServerUrlFor(config *Config) (*url.URL, string, error) {
 	defaultTLS := hasCA || hasCert || config.Insecure // 判断是否开启TLS认证
 	host := config.Host
 	if host == "" {
-		host = "localhost"  //如果host为空，则使用Localhost
+		host = "localhost"  //如果 host 为空, 则使用 Localhost
 	}
 
-    // 调用DefaultServerURL获取baseURL, versionedAPIPath
+    // 调用 DefaultServerURL 获取 baseURL, versionedAPIPath
 	if config.GroupVersion != nil {
 		return DefaultServerURL(host, config.APIPath, *config.GroupVersion, defaultTLS)
 	}
 	return DefaultServerURL(host, config.APIPath, schema.GroupVersion{}, defaultTLS)
 }
 ```
+
 ### 代码片段1.1.1：DefaultServerURL()
 ```go
 // DefaultServerURL converts a host, host:port, or URL string to the default base server API path
@@ -108,15 +115,16 @@ func DefaultServerURL(host, apiPath string, groupVersion schema.GroupVersion, de
 		return nil, "", fmt.Errorf("host must be a URL or a host:port pair")
 	}
 	base := host
-    // 使用内置函数url.Parse()将config中的host字段解析为net/url.URL结构，hostURL内容如下图所示。
+    // 使用内置函数 url.Parse() 将 config 中的 host 字段解析为 net/url.URL 结构, 
+    //hostURL 内容如下图所示. 
 	hostURL, err := url.Parse(base)
-    // 这里处理解析错误的情况、scheme解析为空、host解析为空的情况
+    // 这里处理解析错误的情况、scheme 解析为空、host 解析为空的情况
 	if err != nil || hostURL.Scheme == "" || hostURL.Host == "" {
 		scheme := "http://"
 		if defaultTLS {
 			scheme = "https://"
 		}
-		hostURL, err = url.Parse(scheme + base) // 使用scheme+base再尝试一次，可能config.Host中未配置scheme.
+		hostURL, err = url.Parse(scheme + base) // 使用scheme+base再尝试一次, 可能config.Host中未配置scheme.
 		if err != nil {
 			return nil, "", err
 		}
@@ -134,36 +142,44 @@ func DefaultServerURL(host, apiPath string, groupVersion schema.GroupVersion, de
 	// hostURL.Path should be blank.
 	//
 	// versionedAPIPath, a path relative to baseURL.Path, points to a versioned API base
-    // DefaultVersionedAPIPath将apiPath和groupVersion的内容拼凑为versionedAPIPath，详细分析见代码片段1.1.2
+    // 
+    //DefaultVersionedAPIPath 将 apiPath 和 groupVersion 的内容拼凑为 versionedAPIPath, 详细分析见代码片段1.1.2
 	versionedAPIPath := DefaultVersionedAPIPath(apiPath, groupVersion)
 
 	return hostURL, versionedAPIPath, nil
 }
 ```
-如果config中配置的host为https://10.176.122.1:6443，则url.Parse()将config中的host字段解析为net/url.URL结构如下所示：
+
+如果 `config` 中配置的 `host` 为 https://10.176.122.1:6443, 
+则 `url.Parse()` 将 `config` 中的 `host` 字段解析为 `net/url.URL` 结构如下所示：
+
 ![image.png](https://cdn.nlark.com/yuque/0/2020/png/501158/1606720691544-d0c90eac-4b5b-43a8-8c95-304e15a4a38e.png#align=left&display=inline&height=225&margin=%5Bobject%20Object%5D&name=image.png&originHeight=450&originWidth=612&size=62650&status=done&style=none&width=306)
+
 ### 代码片段1.1.2：DefaultVersionedAPIPath
-设置API访问的版本路径。
+
+设置API访问的版本路径. 
+
 ```go
 // DefaultVersionedAPIPathFor constructs the default path for the given group version, assuming the given
 // API path, following the standard conventions of the Kubernetes API.
 func DefaultVersionedAPIPath(apiPath string, groupVersion schema.GroupVersion) string {
-    // 使用path包下的Join函数将apiPath添加到/末尾，通常versionedAPIPath为/api或者apis
-    // /api主要用于Kubernetes内置的资源对象（即核心资源组，没有组名），例如/api/v1/pods
-    // /apis主要用于非核心资源组，有组名，例如/apis/apps/v1/deployments
+    // 使用path包下的Join函数将apiPath添加到/末尾, 通常versionedAPIPath为/api或者apis
+    // /api主要用于Kubernetes内置的资源对象（即核心资源组, 没有组名）, 例如/api/v1/pods
+    // /apis主要用于非核心资源组, 有组名, 例如/apis/apps/v1/deployments
 	versionedAPIPath := path.Join("/", apiPath)
 
 	// Add the version to the end of the path
-	if len(groupVersion.Group) > 0 { // 如果有组名，则将versionedAPIPath+group+version
+	if len(groupVersion.Group) > 0 { // 如果有组名, 则将versionedAPIPath+group+version
 		versionedAPIPath = path.Join(versionedAPIPath, groupVersion.Group, groupVersion.Version)
 
-	} else { // 如果没有组名，则versionedAPIPath+version
+	} else { // 如果没有组名, 则versionedAPIPath+version
 		versionedAPIPath = path.Join(versionedAPIPath, groupVersion.Version)
 	}
 
 	return versionedAPIPath
 }
 ```
+
 ## 代码片段1.2：TransportFor(Config)
 
 
@@ -171,10 +187,10 @@ func DefaultVersionedAPIPath(apiPath string, groupVersion schema.GroupVersion) s
 // TransportFor returns an http.RoundTripper that will provide the authentication
 // or transport level security defined by the provided Config. Will return the
 // default http.DefaultTransport if no special case behavior is needed.
-// TransportForfan将返回一个http.RoundTripper对象，这个对象将提供Config配置的认证或者传输层的安全保证。
-// 如果没有特别的需要，将返回http.DefaultTransport
+// TransportForfan将返回一个http.RoundTripper对象, 这个对象将提供Config配置的认证或者传输层的安全保证. 
+// 如果没有特别的需要, 将返回http.DefaultTransport
 func TransportFor(config *Config) (http.RoundTripper, error) {
-    // 使用config.TransportConfig()方法，将client Config转化为 transport Config
+    // 使用config.TransportConfig()方法, 将client Config转化为 transport Config
 	cfg, err := config.TransportConfig()
 	if err != nil {
 		return nil, err
@@ -182,8 +198,10 @@ func TransportFor(config *Config) (http.RoundTripper, error) {
 	return transport.New(cfg)
 }
 ```
+
 ### 代码片段1.2.1：TransportConfig()
-将rest.Config转化为transport.Config，以便用于传输层的安全认证
+ 
+将 `rest.Config` 转化为 `transport.Config`, 以便用于传输层的安全认证
 ```go
 // TransportConfig converts a client config to an appropriate transport config.
 func (c *Config) TransportConfig() (*transport.Config, error) {
@@ -239,11 +257,17 @@ func (c *Config) TransportConfig() (*transport.Config, error) {
 	return conf, nil
 }
 ```
+
 下图为rest.Config配置
+
 ![image.png](https://cdn.nlark.com/yuque/0/2020/png/501158/1606723944469-8f39b108-a620-4df7-bd89-af2ce6fdb44c.png#align=left&display=inline&height=807&margin=%5Bobject%20Object%5D&name=image.png&originHeight=1614&originWidth=1840&size=370145&status=done&style=none&width=920)
+
 下图为transport.Config配置
+
 ![image.png](https://cdn.nlark.com/yuque/0/2020/png/501158/1606724110270-8db0730e-1995-4547-bb86-96c54e126337.png#align=left&display=inline&height=539&margin=%5Bobject%20Object%5D&name=image.png&originHeight=1078&originWidth=1016&size=204453&status=done&style=none&width=508)
+
 ### 代码片段1.2.2：
+
 ```go
 // New returns an http.RoundTripper that will provide the authentication
 // or transport level security defined by the provided Config.
@@ -261,7 +285,7 @@ func New(config *Config) (http.RoundTripper, error) {
 	if config.Transport != nil {
 		rt = config.Transport
 	} else {
-        // client-go内部维护了一个transport的缓存，map[tlsCacheKey]*http.Transport
+        // client-go内部维护了一个transport的缓存, map[tlsCacheKey]*http.Transport
 		rt, err = tlsCache.get(config)
 		if err != nil {
 			return nil, err
@@ -271,7 +295,9 @@ func New(config *Config) (http.RoundTripper, error) {
 	return HTTPWrappersForConfig(config, rt)
 }
 ```
+
 #### 代码片段1.2.2.1
+
 ```go
 func (c *tlsTransportCache) get(config *Config) (http.RoundTripper, error) {
     // 为tls.Config生成为一个Key,详细分析见1.2.2.1.1
@@ -280,7 +306,7 @@ func (c *tlsTransportCache) get(config *Config) (http.RoundTripper, error) {
 		return nil, err
 	}
 
-    // 如果可以缓存，则为给定的tls生成单个transport
+    // 如果可以缓存, 则为给定的 tls 生成单个 transport
 	if canCache {
 		// Ensure we only create a single transport for the given TLS options
 		c.mu.Lock()
@@ -349,7 +375,9 @@ type tlsTransportCache struct {
 	transports map[tlsCacheKey]*http.Transport
 }
 ```
+
 ##### 1.2.2.1.1
+
 ```go
 // tlsConfigKey returns a unique key for tls.Config objects returned from TLSConfigFor
 func tlsConfigKey(c *Config) (tlsCacheKey, bool, error) {
@@ -383,4 +411,4 @@ func tlsConfigKey(c *Config) (tlsCacheKey, bool, error) {
 }
 ```
 
-
+TODO

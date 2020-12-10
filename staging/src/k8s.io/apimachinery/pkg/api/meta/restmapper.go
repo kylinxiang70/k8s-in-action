@@ -45,7 +45,7 @@ var RESTScopeRoot = &restScope{
 
 // DefaultRESTMapper exposes mappings between the types defined in a
 // runtime.Scheme. It assumes that all types defined the provided scheme
-// can be mapped with the provided MetadataAccessor and Codec interfaces.
+// can be mapped with the provided MetadataAccessor and codec interfaces.
 //
 // The resource name of a Kind is defined as the lowercase,
 // English-plural version of the Kind string.
