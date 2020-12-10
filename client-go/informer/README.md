@@ -8,7 +8,7 @@
 Informer 的机制, 降低了了 Kubernetes 各个组件跟 Etcd 与 Kubernetes API Server 的通信压力.
 ## 架构设计
 
-![informer架构](./img/informer-arch.jpg)
+![informer架构](img/informer-arch.jpg)
 
 这张图分为两部分, 黄色图标是开发者需要自行开发的部分, 而其它的部分是 client-go 已经提供的, 直接使用即可.
 
