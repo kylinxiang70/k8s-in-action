@@ -32,6 +32,8 @@
         - [DynamicClient](./client-go/client/discoveryclient)
         - [DiscoveryClient](./client-go/client/discoveryclient)
     - [informer](./client-go/informer)
+        - [Informer架构和示例](./client-go/informer/informer-arch-example.md)
+        - [Reflector](./client-go/informer/reflector.md)
     
 4. [etcd 存储实现](./etcd)
     - TODO
@@ -46,4 +48,6 @@
     - TODO
     
 8. [工具包的实例和源码分析](./util)
-    -  [k8s.io/apimachinery/pkg/util/wait](./util/wait)
+    -  [k8s.io/apimachinery/pkg/util/wait](./util/wait), 该包主要用于支持周期性的任务, 
+    比如循环时间间隔任务执行、重试任务等. 并且提供了内置的随机波动时间间隔和指数增长时间间隔两种实现.
+   
