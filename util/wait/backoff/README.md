@@ -4,8 +4,54 @@
 
 ### jitteredbackoff 示例
 
-```go
+本示例展示了在随机的时间间隔循环执行任务.
 
+```go
+package main
+
+import (
+	"fmt"
+	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"log"
+	"time"
+)
+
+// 设置日志, 方便查看时间
+func init() {
+	log.SetFlags(log.Lmicroseconds)
+}
+
+// 场景:在随机的间隔时间内循环执行任务
+//
+// 设置间隔的基础时间为 2s, jitter 为 2.0, 波动的间隔为 2s ~ 2s * 2 + 2s, 即 2s ~ 6s
+func main() {
+	// 基础间隔时间
+	const baseDuration = time.Second * 2
+
+	// jitter 为波动系数, 最终的 duration 为 duration ~ duration + duration * jitter
+	jBackoffManager := wait.NewJitteredBackoffManager(baseDuration, 2.0, &clock.RealClock{})
+	counter := 0
+
+	for {
+		// 如果执行打印超过 10, 停止执行
+		if counter >= 10 {
+			fmt.Println("Doing more than 10¬ times.")
+			break
+		}
+
+		log.Printf("NO.%d loop!", counter)
+		counter++
+
+		// 每次执行完打印, 使用 Backoff() 方法重新获取一个新的波动的 timer.
+		timer := jBackoffManager.Backoff()
+
+		select {
+		// 等待时间到
+		case <-timer.C():
+		}
+	}
+}
 ```
 
 ### exponentialbackoff 示例
@@ -38,7 +84,7 @@ func init() {
 	log.SetFlags(log.Ldate | log.Ltime)
 }
 
-// request 用来模拟一个延迟为 latency 的请求, ctx 用来控制超时来取消执行当前 request 的 goroutine.
+// request 用来模拟一个随机延迟为 1~10s 的请求, ctx 用来控制超时来取消执行当前 request 的 goroutine.
 // 使用 finish channel 来通知主协程请求完成
 func request(ctx context.Context, finish chan struct{}, latency time.Duration) {
 	fmt.Printf("Request latency %v\n", latency)
@@ -48,7 +94,7 @@ func request(ctx context.Context, finish chan struct{}, latency time.Duration) {
 
 func retry() {
 	// 初始的 Backoff为 2s, 最大 backoff 为 20s,
-    // 设置 resetDuration 为 math.MaxInt64, 表示永远不重置重试间隔
+	// 设置 resetDuration 为 math.MaxInt64, 表示永远不重置重试间隔
 	// factor 因子为 2.0, 即每次重试的间隔时间扩大为原来的 2 倍
 	// jitter 因子为 0.0, 表示不设置波动
 	// 使用真实时钟
@@ -60,17 +106,18 @@ func retry() {
 		finish := make(chan struct{})
 
 		log.Println("Retry to send request...")
-		go request(ctx, finish, time.Second*time.Duration(randomRangeInt(0, 10)))
+		go request(ctx, finish, time.Second*time.Duration(randomRangeInt(1, 10)))
 
-		timer := backoffManager.Backoff()
 		select {
 		case <-ctx.Done():
 			cancel()
+			log.Println("Request timeout!")
 		case <-finish:
 			log.Println("Request finish...")
 			return
 		}
 
+		timer := backoffManager.Backoff()
 		select {
 		case <-timer.C():
 			fmt.Println(time.Now())
@@ -85,7 +132,7 @@ func randomRangeInt(min, max int) int {
 
 // 场景: 随着重试次数增加, 增加重试的时间间隔.
 //
-// 使用 request() 模拟一个随机延迟在 [0~10) 的请求,
+// 使用 request() 模拟一个随机延迟在 [1~10) 的请求,
 // request() timeout 的时间为 2s,
 // 若 request 超时, 则立即开始重试,
 // 重试从间隔从 2s 开始, 最大为 20s, 下一次间隔为上一次间隔的 2 倍,
@@ -96,7 +143,7 @@ func main() {
 	finish := make(chan struct{})
 	// 模拟请求
 	log.Println("Sending request ...")
-	go request(ctx, finish, time.Second*time.Duration(randomRangeInt(0, 10)))
+	go request(ctx, finish, time.Second*time.Duration(randomRangeInt(1, 10)))
 
 	select {
 	case <-ctx.Done():

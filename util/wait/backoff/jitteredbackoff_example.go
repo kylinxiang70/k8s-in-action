@@ -40,11 +40,10 @@ func main() {
 
 		// 每次执行完打印, 使用 Backoff() 方法重新获取一个新的波动的 timer.
 		timer := jBackoffManager.Backoff()
-		t := timer.C()
 
 		select {
 		// 等待时间到
-		case <-t:
+		case <-timer.C():
 		}
 	}
 }

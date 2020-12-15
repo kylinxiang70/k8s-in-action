@@ -23,7 +23,7 @@ func init() {
 	log.SetFlags(log.Ldate | log.Ltime)
 }
 
-// request 用来模拟一个延迟为 latency 的请求, ctx 用来控制超时来取消执行当前 request 的 goroutine.
+// request 用来模拟一个随机延迟为 1~10s 的请求, ctx 用来控制超时来取消执行当前 request 的 goroutine.
 // 使用 finish channel 来通知主协程请求完成
 func request(ctx context.Context, finish chan struct{}, latency time.Duration) {
 	fmt.Printf("Request latency %v\n", latency)
@@ -45,17 +45,18 @@ func retry() {
 		finish := make(chan struct{})
 
 		log.Println("Retry to send request...")
-		go request(ctx, finish, time.Second*time.Duration(randomRangeInt(0, 10)))
+		go request(ctx, finish, time.Second*time.Duration(randomRangeInt(1, 10)))
 
-		timer := backoffManager.Backoff()
 		select {
 		case <-ctx.Done():
 			cancel()
+			log.Println("Request timeout!")
 		case <-finish:
 			log.Println("Request finish...")
 			return
 		}
 
+		timer := backoffManager.Backoff()
 		select {
 		case <-timer.C():
 			fmt.Println(time.Now())
@@ -70,7 +71,7 @@ func randomRangeInt(min, max int) int {
 
 // 场景: 随着重试次数增加, 增加重试的时间间隔.
 //
-// 使用 request() 模拟一个随机延迟在 [0~10) 的请求,
+// 使用 request() 模拟一个随机延迟在 [1~10) 的请求,
 // request() timeout 的时间为 2s,
 // 若 request 超时, 则立即开始重试,
 // 重试从间隔从 2s 开始, 最大为 20s, 下一次间隔为上一次间隔的 2 倍,
@@ -81,7 +82,7 @@ func main() {
 	finish := make(chan struct{})
 	// 模拟请求
 	log.Println("Sending request ...")
-	go request(ctx, finish, time.Second*time.Duration(randomRangeInt(0, 10)))
+	go request(ctx, finish, time.Second*time.Duration(randomRangeInt(1, 10)))
 
 	select {
 	case <-ctx.Done():
