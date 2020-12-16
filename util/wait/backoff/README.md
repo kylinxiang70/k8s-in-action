@@ -273,7 +273,7 @@ func Jitter(duration time.Duration, maxFactor float64) time.Duration {
 exponentialBackoffManagerImpl 的结构比 jitteredBackoffManagerImpl
 更加复杂, 源码如下:
 
-代码路径:
+代码路径: k8s.io/apimachinery/pkg/util/wait/wait.go
 
 ```go
 type exponentialBackoffManagerImpl struct {
@@ -315,6 +315,10 @@ type Backoff struct {
 }
 ```
 
+wait 包提供了 NewExponentialBackoffManager 来创建 exponentialBackoffManagerImpl 对象.
+
+代码路径: k8s.io/apimachinery/pkg/util/wait/wait.go
+
 
 ```go
 // NewExponentialBackoffManager 返回一个管理 exponential backoff 的 manager.
@@ -342,6 +346,9 @@ func NewExponentialBackoffManager(initBackoff, maxBackoff, resetDuration time.Du
 }
 ```
 
+Backoff() 实现
+
+代码路径: k8s.io/apimachinery/pkg/util/wait/wait.go
 
 ```go
 // 实现了 Backoff() 接口, 调用者可以阻塞的时间可以随指数增长
@@ -355,6 +362,10 @@ func (b *exponentialBackoffManagerImpl) Backoff() clock.Timer {
 	return b.backoffTimer
 }
 ```
+
+Backoff() 实例调用了 getNextBackoff() 来控制 Duration 是否重置.
+
+代码路径: k8s.io/apimachinery/pkg/util/wait/wait.go
 
 ```go
 func (b *exponentialBackoffManagerImpl) getNextBackoff() time.Duration {
@@ -377,6 +388,9 @@ func (b *exponentialBackoffManagerImpl) getNextBackoff() time.Duration {
 }
 ```
 
+最后通过 Step 方法实现 Duration 的指数增长.
+
+代码路径: k8s.io/apimachinery/pkg/util/wait/wait.go
 
 ```go
 // Step (1) returns an amount of time to sleep determined by the

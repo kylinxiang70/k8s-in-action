@@ -9,35 +9,24 @@ import (
 	"context"
 	"fmt"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"log"
 	"time"
 )
+
+func init() {
+	log.SetFlags(log.Lmicroseconds)
+}
 
 // main 中使用 wait.JitterUntil 在1分钟内每隔 10s 打印一次 "Doing task..."
 func main() {
 	// stopCh 通知 BackOffUtil 停止执行
 	stopCh := make(chan struct{})
-	// stopCountCh 通知打印时间的 goroutine 停止打印
-	stopCountCh := make(chan struct{})
 
 	// 创建一个带超时的 Context
 	ctx, _ := context.WithTimeout(context.Background(), time.Minute)
 
 	// 开始计时，每隔一秒打印时间
-	go func(ctx context.Context, stopCh, stopCountCh chan struct{}) {
-		// 另起一个 goroutine 每秒打印当前经过的时间
-		go func(chan struct{}) {
-			i := 1
-			for {
-				select {
-				case <-stopCountCh:
-					return
-				default:
-				}
-				time.Sleep(time.Second)
-				fmt.Println(i)
-				i = i + 1
-			}
-		}(stopCountCh)
+	go func(ctx context.Context, stopCh chan struct{}) {
 
 		// select 多路复用判断是否超时
 		for {
@@ -47,15 +36,14 @@ func main() {
 				fmt.Println("timeout!")
 				// 通知 BackoffUtil 停止执行
 				stopCh <- struct{}{} // 也可以 close(stopCh)
-				// 通知另外一个 goroutine 停止打印时间
-				stopCountCh <- struct{}{}
+
 				return
 			default:
 			}
 		}
-	}(ctx, stopCh, stopCountCh)
+	}(ctx, stopCh)
 
-	// JitterUntil 在每个周期循环执行指定的任务直到 stopCh 发送停止信号.
+	// JitterUntil 在每个周期循环执行指定的函数直到 stopCh 发送停止信号.
 	//
 	// 如果 jitterFactor 为正数, 周期会在函数运行前调整
 	// 如果 jitterFactor 不是正数(负数或者零), 周期不变
@@ -66,7 +54,7 @@ func main() {
 	// wait.Forever 通过传递 wait.NeverStop 来实现.
 	wait.JitterUntil(func() {
 		fmt.Println("Doing task...")
-	}, time.Second*10, 1.0, true, stopCh)
+	}, time.Second*10, 0.0, true, stopCh)
 }
 ```
 
