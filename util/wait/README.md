@@ -1,8 +1,10 @@
 # wait
 
-k8s.io/apimachinery/pkg/util/wait/wait.go 提供了执行周期性任务的API.
+k8s.io/apimachinery/pkg/util/wait/wait.go 提供了执行周期性任务的API以及周期性检测某种状态的API.
 
-这些 API 主要提供以下通途:
+该包中体现了 k8s 对定时器和 goroutine 的最佳实践, 一些值得学习的代码片段被另外总结在[NOTE.md](./NOTE.md)中
+
+## 周期性执行任务
 
 - 永久性间隔一定周期执行指定任务. 比如, 永久每隔 10s 循环执行一个指定任务.
     - 相关 API: wait.Forever()
@@ -36,3 +38,22 @@ k8s 目前对 BackoffManager 有两种实现:
     - 应用场景: 比如游戏场景中, 随机事件间隔刷怪.    
   
 [exponentialBackoffManagerImpl 和 jitteredBackoffManagerImpl 示例及源码详解](./backoff)
+
+## 周期性检测某个状态
+
+- 周期性的探测某个状态(先探测再等待)
+    - 相关API: PollImmediateUntil()
+    - [wait.PollImmediateUntil 源码分析](./pollImmediateUntil)
+- 周期性的探测某个状态(先等带在探测)
+    - 相关API: PollUntil()
+    - [wait.PollUntil 源码分析](./polluntil)
+- 自定义探测规则探测某个状态
+    - 相关API: WaitFor()
+    - [wait.WaitFor 源码分析](./waitfor)
+    
+ 以上 API 的实现关系如下所示(下层实现上层): 
+ ```
+     wait.PollImmediateUntil()
+     wait.PollUntil()
+     wait.WaitFor()
+ ```
