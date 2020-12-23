@@ -86,16 +86,10 @@ func BackoffUntil(f func(), backoff BackoffManager, sliding bool, stopCh <-chan 
 			t = backoff.Backoff()
 		}
 
-		// NOTE: b/c there is no priority selection in golang
-		// it is possible for this to race, meaning we could
-		// trigger t.C and stopCh, and t.C select falls through.
-		// In order to mitigate we re-check stopCh at the beginning
-		// of every loop to prevent extra executions of f().
-
         // 注意, 因为 golang 中 select 没有优先级, 每个 case 都可能执行, 
         // 这可能会导致竞争 (race), 也就是说我们可以触发 t.C 和 stopCh, t.C select 失败.
-        // 为了减轻这种竞争, 在 每次循环开始是, 都校验 stopCh, 这可以避免当
-        // stopCh 和 t.C() 通知就绪时, select 了t.C(), 来防止额外执行 stopCh
+        // 为了减轻这种竞争, 在 每次循环开始时, 都校验 stopCh, 这可以避免当
+        // stopCh 和 t.C() 通知就绪时, 如果 select 了 t.C(), 下一次循环仍可以放置额外执行一次 f()
 		select {
 		case <-stopCh:
 			return
@@ -105,5 +99,3 @@ func BackoffUntil(f func(), backoff BackoffManager, sliding bool, stopCh <-chan 
 }
 ```
 
-### BackoffManager分析
-TODO

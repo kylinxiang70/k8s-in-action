@@ -103,6 +103,7 @@ func retry() {
 
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration)
+		defer cancel()
 		finish := make(chan struct{})
 
 		log.Println("Retry to send request...")
@@ -110,7 +111,6 @@ func retry() {
 
 		select {
 		case <-ctx.Done():
-			cancel()
 			log.Println("Request timeout!")
 		case <-finish:
 			log.Println("Request finish...")
