@@ -5,6 +5,7 @@ Kubernetes Runtime 在 vendor/k8s.io/apimachinery/pkg/runtime 中实现,
 `runtime.Object` 是Kubernetes 类型系统的基石.
 资源对象（Resource Object）都有一个共同的结构 `runtime.Object`.
 `runtime.Object` 被设计为接口, 作为资源对象的通用资源对象.
+
 ```
 Pod 资源对象可以和 runtime.Object 相互转化   Deployment 资源对象可以和 runtime.Object 相互转化
 ---------------              ------------------                 --------------------

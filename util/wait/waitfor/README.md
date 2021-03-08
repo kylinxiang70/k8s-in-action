@@ -81,7 +81,7 @@ func poller(interval, timeout time.Duration) WaitFunc {
 			var after <-chan time.Time
 			if timeout != 0 {
                 // 这里使用 time.After 可能更加方便, 但是有可能
-                // 导致 timer 存在更长的时间（如果此 goroutine 推出得早)
+                // 导致 timer 存在更长的时间（如果此 goroutine 退出得早)
                 // 因为 time.After 使用 NewTimer(d).C 返回一个 channel,
 				// 不能调用 Stop() 停止 timer.
 				timer := time.NewTimer(timeout)

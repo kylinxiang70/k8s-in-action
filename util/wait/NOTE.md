@@ -29,6 +29,7 @@ func PollUntil(interval time.Duration, condition ConditionFunc, stopCh <-chan st
 	defer cancel()
 	return WaitFor(poller(interval, 0), condition, ctx.Done())
 }
+
 func WaitFor(wait WaitFunc, fn ConditionFunc, done <-chan struct{}) error {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
