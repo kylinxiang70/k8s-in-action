@@ -1,5 +1,144 @@
 # Reflector
 
+# Reflector
+
+## Reflector 结构
+
+```go
+// Reflector watch 指定的资源，然后将所有的变化存储到 store.
+type Reflector struct {
+    // name 用来识别当前的 reflector. 默认是 file:line
+	name string
+
+    // 期望被放入 store 的类型名称。
+    // 如果 expectedGVK 不为空，则 expectedTypeName 为 expectedGVK 的字符串形式；
+    // 否则， expectedTypeName 的值为 expectedType 的字符串形式。
+    // expectedTypeName 只起展示作用，并不用作解析和比较。
+	expectedTypeName string
+    // 期望被放入 store 的一个样例对象的类型。
+    // 只需要类型是正确的，除非是 `unstructured.Unstructured`,
+    // 但是 apiVersion 和 kind 也需要是正确的。
+	expectedType reflect.Type
+	// The GVK of the object we expect to place in the store if unstructured.
+    // 期望被放入 store 的对象的 GVK
+	expectedGVK *schema.GroupVersionKind
+    // 与 watch 资源同步的目的地
+	store Store
+    // listerWatcher 用来执行 lists 和 watches 操作。
+	listerWatcher ListerWatcher
+
+    // backoffManager 用来管理 ListWatch 的执行。
+	backoffManager wait.BackoffManager
+
+	resyncPeriod time.Duration
+    // ShouldResync 被周期性地调用，无论何时其返回 true，store 的 Resync 操作都会被调用。
+	ShouldResync func() bool
+    // clock 允许测试修改时间。
+	clock clock.Clock
+    // paginatedResult 定义是否强制 list 调用时进行分页。
+    // 在初始 list 调用时被设置。
+	paginatedResult bool
+    // 上一次与依赖的 store 同步时观察到的 resource version token.
+	lastSyncResourceVersion string
+    // isLastSyncResourceVersionUnavailable 为 true，如果之前带有 lastSyncResourceVersion 的 list 
+    // 或 watch 请求出现了 “expired” 或 “to large resource version” 错误。
+	isLastSyncResourceVersionUnavailable bool
+    // lastSyncResourceVersionMutex 保证安全地读写 lastSyncResourceVersion。
+	lastSyncResourceVersionMutex sync.RWMutex
+	// WatchListPageSize is the requested chunk size of initial and resync watch lists.
+	// If unset, for consistent reads (RV="") or reads that opt-into arbitrarily old data
+	// (RV="0") it will default to pager.PageSize, for the rest (RV != "" && RV != "0")
+	// it will turn off pagination to allow serving them from watch cache.
+	// NOTE: It should be used carefully as paginated lists are always served directly from
+	// etcd, which is significantly less efficient and may lead to serious performance and
+	// scalability problems.
+    // WatchListPageSize 是 initial 和 resync watch lists 的 chunk size。
+    // 如果没有设置，对于持续性的读取 (RV="") 或任意访问旧的数据(RV="0") 将会使用默认值 pager.PageSize。
+    // 对于其他的请求（RV != "" && RV != "0"）将会关闭分页功能。
+    // NOTE: 当分页的 list 总是被 etcd 直接服务时，需要慎用，因为可能导致严重的性能问题。
+	WatchListPageSize int64
+	// 无论何时，当 listAndWatch 因为错误丢失链接后都会被调用。
+	watchErrorHandler WatchErrorHandler
+}
+```
+
+## WatchErrorHandler
+
+```go
+
+// 无论何时，当 listAndWatch 因为错误丢失链接后都会被调用。
+// 当调用此 handler 后，informer 将会 backoff 和 retry。
+//
+// 默认的实现根据 error type 使用适当的日志等级记录错误信息。
+// 实现需要快速返回，任意耗时的处理都应该被去掉。
+type WatchErrorHandler func(r *Reflector, err error)
+
+// DefaultWatchErrorHandler 是默认的 WatchErrorHandler 实现。
+func DefaultWatchErrorHandler(r *Reflector, err error) {
+	switch {
+	case isExpiredError(err):
+        // 没有设置 LastSyncResourceVersionUnavailable - 带有 ResourceVersion=RV 的 LIST 调用
+        // 已经具有一个语义，即它返回的数据至少与提供的RV一样新。
+		// So first try to LIST with setting RV to resource version of last observed object.
+        // 因此，首先尝试将RV设置为最后观察对象的资源版本。
+		klog.V(4).Infof("%s: watch of %v closed with: %v", r.name, r.expectedTypeName, err)
+	case err == io.EOF:
+		// watch 正常关闭。
+	case err == io.ErrUnexpectedEOF:
+		klog.V(1).Infof("%s: Watch for %v closed with unexpected EOF: %v", r.name, r.expectedTypeName, err)
+	default:
+		utilruntime.HandleError(fmt.Errorf("%s: Failed to watch %v: %v", r.name, r.expectedTypeName, err))
+	}
+}
+```
+
+## 创建 Reflector
+
+```go
+// NewNamespaceKeyedIndexerAndReflector 创建了一个 indexer 和一个 reflector。
+// The indexer is configured to key on namespace
+func NewNamespaceKeyedIndexerAndReflector(lw ListerWatcher, expectedType interface{}, resyncPeriod time.Duration) (indexer Indexer, reflector *Reflector) {
+	indexer = NewIndexer(MetaNamespaceKeyFunc, Indexers{NamespaceIndex: MetaNamespaceIndexFunc})
+	reflector = NewReflector(lw, expectedType, indexer, resyncPeriod)
+	return indexer, reflector
+}
+```
+
+```go
+// NewReflexor创建一个 Reflector 对象，该对象将使得给定资源的在 store 和 server 端的内容保持最新。
+// Reflector 只保证在有 expectedType 的情况下向的 store 中 put 东西，除非 expectedType 为 nil。
+// 如果 resyncPeriod 为非零，那么 reflector 将会周期性咨询它的 ShouldResync 函数来决定是否调用
+// Store 的重新同步操作；`ShouldResync==nil`意味着总是“yes”。这使您能够使用 Reflector 定期处理所有内容，
+// 以及增量处理更改的内容。
+func NewReflector(lw ListerWatcher, expectedType interface{}, store Store, resyncPeriod time.Duration) *Reflector {
+	return NewNamedReflector(naming.GetNameFromCallsite(internalPackages...), lw, expectedType, store, resyncPeriod)
+}
+```
+
+```go
+// NewNamedReflector 与 NewReflector 一样，但是可以指定一个名字用于 logging。
+func NewNamedReflector(name string, lw ListerWatcher, expectedType interface{}, store Store, resyncPeriod time.Duration) *Reflector {
+	realClock := &clock.RealClock{}
+	r := &Reflector{
+		name:          name,
+		listerWatcher: lw,
+		store:         store,
+		// We used to make the call every 1sec (1 QPS), the goal here is to achieve ~98% traffic reduction when
+		// API server is not healthy. With these parameters, backoff will stop at [30,60) sec interval which is
+		// 0.22 QPS. If we don't backoff for 2min, assume API server is healthy and we reset the backoff.
+		backoffManager:    wait.NewExponentialBackoffManager(800*time.Millisecond, 30*time.Second, 2*time.Minute, 2.0, 1.0, realClock),
+		resyncPeriod:      resyncPeriod,
+		clock:             realClock,
+		watchErrorHandler: WatchErrorHandler(DefaultWatchErrorHandler),
+	}
+	r.setExpectedType(expectedType)
+	return r
+}
+```
+
+
+
+
 Reflector 用于 Kubernetes 资源, 当资源发生变化时, 触发相应的变更事件, 例如添加、更新、删除事件,
 并将其资源对象存放到本地缓存 DeltaFIFO 中.
 
