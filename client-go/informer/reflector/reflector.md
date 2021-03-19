@@ -1,7 +1,5 @@
 # Reflector
 
-# Reflector
-
 ## Reflector 结构
 
 ```go
@@ -136,42 +134,12 @@ func NewNamedReflector(name string, lw ListerWatcher, expectedType interface{}, 
 }
 ```
 
-
-
-
-Reflector 用于 Kubernetes 资源, 当资源发生变化时, 触发相应的变更事件, 例如添加、更新、删除事件,
-并将其资源对象存放到本地缓存 DeltaFIFO 中.
-
-通过 NewReflector 来实例化 Reflector 对象,实例化过程中必须传入 ListerWatcher数据接口对象,
-它拥有 List 和 Watch 方法, 用于监控资源列表.
-```go
-type ListerWatcher interface {
-	Lister
-	Watcher
-}
-```
-
-Reflector 实现中,主要是 ListAndWatch 函数,它负责获取资源列表 (List) 和 监控 (Watch) 指定的 Kubernetes API Server 资源.
-
-ListAndWatch 函数实现可以分为两个部分: 1. 获取资源列表数据, 2. 监控资源对象.
-
-```
-         r.listerWather.List
-                 v
-                 v
-  listMetaInterface.GetResourceVersion
-                 v
-                 v
-          meta.ExtractList
-                 v
-                 v
-     r.SetLastSyncResourceVersion
-```
+## ListAndWatch
 
 ```go
-// ListAndWatch first lists all items and get the resource version at the moment of call,
-// and then use the resource version to watch.
-// It returns error if ListAndWatch didn't even try to initialize watch.
+// ListAndWatch 首先 list 所有的 items, 并获取对应的 resource version,
+// 然后使用 resource version 来 watch 对应的资源.
+// 如果 ListAndWatch 没有尝试初始化 watch, 会返回一个错误.
 func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 	klog.V(3).Infof("Listing and watching %v from %s", r.expectedTypeName, r.name)
 	var resourceVersion string
@@ -362,3 +330,36 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 	}
 }
 ```
+
+```go
+// relistResourceVersion determines the resource version the reflector should list or relist from.
+// Returns either the lastSyncResourceVersion so that this reflector will relist with a resource
+// versions no older than has already been observed in relist results or watch events, or, if the last relist resulted
+// in an HTTP 410 (Gone) status code, returns "" so that the relist will use the latest resource version available in
+// etcd via a quorum read.
+// relistResourceVersion 决定 Reflector 应用 list 还是 relist 资源版本（resource version）.
+// 返回以下两种情况中的一个：
+// 1. 返回 lastSyncResourceVersion, 以便于当前 Reflector relist 不早于 resource version 的已经在 relist 结果
+//    或 watch event 中被观察到的 resource version. 也就是说返回 lastSyncResourceVersion, 即上一次观察到的版本,
+//    以便于重新从上一次开始 relist.
+// 2. 如果上一次 relist 结果返回了 HTTP 410 (gone) 状态码, 则返回 "" 以便于 relist 使用 最新的
+//    可用的 resource version（通过 etcd quorum read 获取）.
+func (r *Reflector) relistResourceVersion() string {
+	r.lastSyncResourceVersionMutex.RLock()
+	defer r.lastSyncResourceVersionMutex.RUnlock()
+
+	if r.isLastSyncResourceVersionUnavailable {
+		// Since this reflector makes paginated list requests, and all paginated list requests skip the watch cache
+		// if the lastSyncResourceVersion is unavailable, we set ResourceVersion="" and list again to re-establish reflector
+		// to the latest available ResourceVersion, using a consistent read from etcd.
+		return ""
+	}
+	if r.lastSyncResourceVersion == "" {
+		// For performance reasons, initial list performed by reflector uses "0" as resource version to allow it to
+		// be served from the watch cache if it is enabled.
+		return "0"
+	}
+	return r.lastSyncResourceVersion
+}
+```
+
