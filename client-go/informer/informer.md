@@ -131,37 +131,6 @@ type ServiceInformer interface {
 ```
 
 ### SharedInformer
-```plantuml
-@startuml
-interface cache.SharedInformer {
-    + AddEventHandler(handler ResourceEventHandler)
-    + AddEventHandlerWithResyncPeriod(handler ResourceEventHandler, resyncPeriod time.Duration)
-    + GetStore() Store
-    + GetController() Controller
-    + Run(stopCh <-chan struct{})
-    + HasSynced() bool
-    + LastSyncResourceVersion() string
-    + SetWatchErrorHandler(handler WatchErrorHandler) error
-}
-
-interface cache.SharedIndexInformer {
-    {field} + SharedInformer
-    {method} + AddIndexers(indexers Indexers) error
-    {method} + GetIndexer() Indexer
-}
-
-cache.SharedInformer <|-- cache.SharedIndexInformer
-
-interface v1.PodInformer {
-    Informer() cache.SharedIndexInformer
-    Lister() v1.PodLister
-}
-
-cache.SharedIndexInformer <-- v1.PodInformer
-@enduml
-```
-
-SharedInformer是一个接口，其中定义了实现Informer机制的所有方法。SharedIndexInformer接口对SharedInformer进行了扩展，增加了Indexer相关的功能。SharedIndexInformer比SharedInformer多持有一个Indexer，Indexer实现了对etcd数据的缓存。
 
 ==SharedInformer提供了Informer共享机制，来降低API Server序列化的压力。==
 
@@ -256,6 +225,127 @@ func (f *sharedInformerFactory) Start(stopCh <-chan struct{}) {
     }
 }
 ```
+```plantuml
+@startuml
+interface cache.SharedInformer {
+    + AddEventHandler(handler ResourceEventHandler)
+    + AddEventHandlerWithResyncPeriod(handler ResourceEventHandler, resyncPeriod time.Duration)
+    + GetStore() Store
+    + GetController() Controller
+    + Run(stopCh <-chan struct{})
+    + HasSynced() bool
+    + LastSyncResourceVersion() string
+    + SetWatchErrorHandler(handler WatchErrorHandler) error
+}
+
+interface cache.SharedIndexInformer {
+    {field} + SharedInformer
+    {method} + AddIndexers(indexers Indexers) error
+    {method} + GetIndexer() Indexer
+}
+
+cache.SharedInformer <|-- cache.SharedIndexInformer
+
+interface v1.PodInformer {
+    Informer() cache.SharedIndexInformer
+    Lister() v1.PodLister
+}
+
+cache.SharedIndexInformer <.. v1.PodInformer
+
+interface cache.Store {
+    {method} + Add(obj interface{}) error
+    {method} + Update(obj interface{}) error
+    {method} + Delete(obj interface{}) error
+    {method} + List() []interface{}
+    {method} + ListKeys() []string
+    {method} + Get(obj interface{}) (item interface{}, exists bool, err error)
+    {method} + GetByKey(key string) (item interface{}, exists bool, err error)
+    {method} + Replace([]interface{}, string) error
+    {method} + Resync() error
+}
+
+cache.SharedInformer <-- cache.Store
+
+interface cache.Controller {
+    {method} + Run(stopCh <-chan struct{})
+    {method} + HasSynced() bool
+    {method} + LastSyncResourceVersion() string
+}
+
+cache.SharedInformer <-- cache.Controller
+
+class cache.DeltaFIFO {
+	{field} - lock sync.RWMutex
+	{field} - cond sync.Cond
+	{field} - items map[string]Deltas
+	{field} - queue []string
+	{field} - populated bool
+	{field} - initialPopulationCount int
+	{field} - keyFunc KeyFunc
+	{field} - knownObjects KeyListerGetter
+	{field} - closed bool
+	{field} - emitDeltaTypeReplaced bool
+    {method} + Close()
+    {method} + KeyOf(obj interface{}) (string, error)
+    {method} + HasSynced() bool
+    {method} + Add(obj interface{}) error
+    {method} + Update(obj interface{}) error
+    {method} + Delete(obj interface{}) error
+    {method} + AddIfNotPresent(obj interface{}) error
+    {method} - addIfNotPresent(id string, deltas Deltas)
+    {method} - dedupDeltas(deltas Deltas) Deltas
+    {method} - isDup(a, b *Delta) *Delta
+    {method} - isDeletionDup(a, b *Delta) *Delta
+    {method} - queueActionLocked(actionType DeltaType, obj interface{}) error
+    {method} + List() []interface{}
+    {method} - listLocked() []interface{}
+    {method} + ListKeys() []string
+    {method} + Get(obj interface{}) (item interface{}, exists bool, err error)
+    {method} + GetByKey(key string) (item interface{}, exists bool, err error)
+    {method} + IsClosed() bool
+    {method} + Pop(process PopProcessFunc) (interface{}, error) 
+    {method} + Replace(list []interface{}, resourceVersion string) error
+    {method} + Resync() error
+    {method} - syncKeyLocked(key string) error
+}
+
+cache.Store <|-- cache.DeltaFIFO
+
+interface cache.KeyLister {
+    {method} + ListKeys() []string
+}
+
+interface cache.KeyGetter {
+    {method} + GetByKey(key string) (value interface{}, exists bool, err error)
+}
+
+interface cache.KeyListerGetter {
+    {field} + KeyLister
+	{field} + KeyGetter
+}
+
+cache.KeyLister <|-- cache.KeyListerGetter
+cache.KeyGetter <|-- cache.KeyListerGetter
+cache.KeyListerGetter <|-- cache.Store
+
+interface cache.Indexer {
+    {field} + Store
+    {method} + Index(indexName string, obj interface{}) ([]interface{}, error)
+    {method} + IndexKeys(indexName, indexedValue string) ([]string, error)
+    {method} + ListIndexFuncValues(indexName string) []string
+    {method} + ByIndex(indexName, indexedValue string) ([]interface{}, error)
+    {method} + GetIndexers() Indexers
+    {method} + AddIndexers(newIndexers Indexers) error
+}
+
+cache.Store <|-- cache.Indexer
+
+@enduml
+```
+
+SharedInformer是一个接口，其中定义了实现Informer机制的所有方法。SharedIndexInformer接口对SharedInformer进行了扩展，增加了Indexer相关的功能。SharedIndexInformer比SharedInformer多持有一个Indexer，Indexer实现了对etcd数据的缓存。
+
 
 ## Reflector
 
@@ -1155,5 +1245,65 @@ class cache.cache {
 
 cache.Indexer <|-- cache.cache
 
+interface cache.ThreadSafeStore {
+	{method} + Add(key string, obj interface{})
+	{method} + Update(key string, obj interface{})
+	{method} + Delete(key string)
+	{method} + Get(key string) (item interface{}, exists bool)
+	{method} + List() []interface{}
+	{method} + ListKeys() []string
+	{method} + Replace(map[string]interface{}, string)
+	{method} + Index(indexName string, obj interface{}) ([]interface{}, error)
+	{method} + IndexKeys(indexName, indexKey string) ([]string, error)
+	{method} + ListIndexFuncValues(name string) []string
+	{method} + ByIndex(indexName, indexKey string) ([]interface{}, error)
+	{method} + GetIndexers() Indexers
+	{method} + AddIndexers(newIndexers Indexers) error
+	{method} + Resync() error
+}
+
+cache.cache *-- cache.ThreadSafeStore
+
+class cache.threadSafeMap {
+    {field} - lock  sync.RWMutex
+	{field} - items map[string]interface{}
+	{field} - indexers Indexers
+	{field} - indices Indices
+    {method} + Add(key string, obj interface{})
+    {method} + Update(key string, obj interface{})
+    {method} + Delete(key string)
+    {method} + Get(key string) (item interface{}, exists bool)
+    {method} + List() []interface{}
+    {method} + ListKeys() []string
+    {method} + Replace(items map[string]interface{}, resourceVersion string)
+    {method} + Index(indexName string, obj interface{}) ([]interface{}, error)
+    {method} + ByIndex(indexName, indexedValue string) ([]interface{}, error)
+    {method} + IndexKeys(indexName, indexedValue string) ([]string, error)
+    {method} + ListIndexFuncValues(indexName string) []string
+    {method} + GetIndexers() Indexers
+    {method} + AddIndexers(newIndexers Indexers) error
+    {method} - updateIndices(oldObj interface{}, newObj interface{}, key string)
+    {method} - deleteFromIndices(obj interface{}, key string)
+    {method} + Resync() error
+}
+
+cache.ThreadSafeStore <|-- cache.threadSafeMap
+
+class cache.Index {
+    map[string]set.String
+}
+
+class cache.Indexers {
+    map[string]IndexFunc
+}
+
+class cache.Indices {
+    map[string]Index
+}
+
+cache.Indices o-- cache.Index
+
+cache.threadSafeMap <-- cache.Indexers
+cache.threadSafeMap <-- cache.Indices
 @enduml
 ```
